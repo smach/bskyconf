@@ -1,0 +1,393 @@
+---
+title: "Getting Started with bskyconf"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with bskyconf}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+_This vignette was writtne by Posit Assistant + Claude Opus 4.6_
+
+bskyconf was designed to track and display Bluesky posts for any conference based on defined conference hashtags. This guide walks you through the full workflow: setting up credentials, creating a conference, fetching posts, launching the Shiny app, and deploying to a server.
+
+## Prerequisites
+
+### Install bskyconf
+
+```{r}
+pak::pak("smach/bskyconf", dependencies = TRUE)
+```
+
+### Set up Bluesky credentials
+
+bskyconf uses the [bskyr](https://christopherkenny.github.io/bskyr/) package to access the Bluesky API. You need an **app password** (not your main password).
+
+1. Go to [bsky.app/settings/app-passwords](https://bsky.app/settings/app-passwords)
+2. Click "Add App Password" and save the generated password
+3. Add both to your `.Renviron` file:
+
+```
+BLUESKY_APP_USER=yourhandle.bsky.social
+BLUESKY_APP_PASS=xxxx-xxxx-xxxx-xxxx
+```
+
+You can edit `.Renviron` with `usethis::edit_r_environ()`. Restart R after saving for changes to take effect.
+
+### Verify authentication
+
+```{r}
+library(bskyconf)
+auth <- bs_conference_auth()
+```
+
+If this runs without error, you're ready to go.
+
+## Create a conference
+
+Use `setup_conference()` to scaffold a new conference directory with all the files you need:
+```{r}
+setup_conference(
+  path = "~/conferences/nicar2026",
+  conference_name = "NICAR 2026",
+  hashtags = c("#NICAR26", "#NICAR2026"),
+  min_date = as.Date("2026-01-01"),
+  exclude_accounts_regex = "\\.ap\\.brid\\.gy"
+)
+```
+
+This creates:
+
+```
+nicar2026/
+  _bskyconf.yml     # All conference settings
+
+  app.R             # Shiny Server entry point
+  update_posts.R    # Cron job script
+  data/             # Empty data directory
+```
+
+## Understanding the config file
+
+Open `_bskyconf.yml` to review and customize your settings:
+
+```yaml
+conference_name: "NICAR 2026"
+conference_slug: "nicar2026"
+hashtags:
+  - "#NICAR26"
+  - "#NICAR2026"
+data_dir: "data"
+posts_per_hashtag: 250
+min_date: "2026-01-01"
+exclude_accounts_regex: "\\.ap\\.brid\\.gy"
+about_text: "This app displays posts on Bluesky with tags related to NICAR 2026."
+update_text: "The data is re-pulled periodically. During the conference, updates happen every 30 to 60 minutes."
+```
+
+Key fields:
+
+- **hashtags**: Add as many as you need. Include the `#` prefix.
+- **min_date**: Prevents old posts from prior years' conferences from appearing if necessary (some hashtags don't include years).
+- **posts_per_hashtag**: Increase during the conference if volume is high (e.g., 500).
+- **exclude_accounts_regex**: The pattern `\\.ap\\.brid\\.gy` filters out POSSE bridge accounts that cross-post from other platforms.
+
+## Fetch posts manually
+
+Run the update function to pull initial data. For example:
+
+```{r}
+update_conference_posts(
+  hashtags = c("#NICAR26", "#NICAR2026"),
+  data_dir = "~/conferences/nicar2026/data",
+  min_date = as.Date("2026-01-01")
+)
+```
+
+You'll see progress messages as it fetches posts, checks accounts, and saves the data files:
+
+```
+Fetching posts for 2 hashtags...
+  Searching "#NICAR26"...
+  Searching "#NICAR2026"...
+Found 342 posts total.
+Checking accounts for exclusion criteria...
+287 unique posts after filtering.
+Archive saved: 287 total posts.
+Display table saved: 287 posts for app.
+```
+
+Two files are created in your `data/` directory:
+
+- `previous_retrieved_posts.Rds` -- the running archive of all posts
+- `table_posts.Rds` -- the display-ready data for the Shiny app
+
+## Launch the Shiny app
+
+```{r}
+run_conference_app(
+  conference_name = "NICAR 2026",
+  data_file = "~/conferences/nicar2026/data/table_posts.Rds"
+)
+```
+
+The app opens in your browser with:
+
+- **Metric cards** showing total posts, unique authors, and total likes
+- **Sidebar filters** for date range, URL-only posts, and individual authors
+- **Searchable table** with regex support and clickable links to original posts
+- **Download button** to export filtered data as CSV
+- **FAQ modal** with customizable about and update frequency text
+
+The app automatically checks for data updates every 15 minutes (configurable via `refresh_interval`).
+
+## Deploy to Shiny Server
+
+### Directory setup
+
+Copy or create your conference directory inside your Shiny Server apps directory:
+
+```bash
+# On your server
+sudo mkdir /srv/shiny-server/nicar2026
+```
+
+Then run `setup_conference()` pointing to that directory, or copy your local directory to the server.
+
+### Set up the cron job
+
+Add a crontab entry to fetch posts automatically:
+
+```bash
+crontab -e
+```
+
+```
+# Update NICAR 2026 posts every 30 minutes
+*/30 * * * * /usr/bin/Rscript /srv/shiny-server/nicar2026/update_posts.R >> /var/log/bskyconf/nicar2026.log 2>&1
+```
+
+Make sure the cron user has:
+- R and bskyconf installed
+- `BLUESKY_APP_USER` and `BLUESKY_APP_PASS` set in its `.Renviron`
+
+### Verify
+
+1. Run the update script manually: `Rscript /srv/shiny-server/nicar2026/update_posts.R`
+2. Check that `data/table_posts.Rds` was created
+3. Visit `http://your-server/nicar2026` in your browser
+
+## Deploy to Posit Connect Cloud
+
+[Posit Connect Cloud](https://connect.posit.cloud/) is a hosted platform for
+publishing Shiny apps, Quarto documents, and more. It's a good option if you
+don't have your own Shiny Server.
+
+### Prerequisites
+
+Install the `rsconnect` package and link your account:
+
+```{r}
+install.packages("rsconnect")
+rsconnect::connectCloudUser()
+```
+
+This opens a browser window for authentication. Verify with
+`rsconnect::accounts()`.
+
+### Prepare the conference directory
+
+Set up a conference as usual and fetch initial data:
+
+```{r}
+setup_conference(
+  path = "nicar2026",
+  conference_name = "NICAR 2026",
+  hashtags = c("#NICAR26", "#NICAR2026"),
+  min_date = as.Date("2026-01-01")
+)
+
+update_conference_posts(
+  hashtags = c("#NICAR26", "#NICAR2026"),
+  data_dir = "nicar2026/data",
+  min_date = as.Date("2026-01-01")
+)
+```
+
+### Create the manifest and deploy
+
+Connect Cloud requires a `manifest.json` file that describes the app and its
+dependencies. Generate it with `rsconnect::writeManifest()`, then deploy:
+
+```{r}
+rsconnect::writeManifest(appDir = "nicar2026")
+
+rsconnect::deployApp(
+  appDir = "nicar2026",
+  appTitle = "NICAR 2026 Bluesky Posts",
+  launch.browser = TRUE
+)
+```
+
+Re-run `writeManifest()` any time you add or update package dependencies.
+
+### Automating updates with GitHub Actions
+
+Connect Cloud does not support cron jobs, but you can automate data updates
+with a GitHub Action that runs on a schedule. The workflow:
+
+1. Push your conference directory to a GitHub repository
+2. Store `BLUESKY_APP_USER` and `BLUESKY_APP_PASS` as
+   [repository secrets](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions)
+3. Also store your Connect Cloud credentials as secrets (the `RSCONNECT_TOKEN`
+   and `RSCONNECT_SECRET` from `rsconnect::accounts()`, plus the server URL)
+4. Add a workflow file like `.github/workflows/update-posts.yml`:
+
+```yaml
+name: Update conference posts
+on:
+  schedule:
+    - cron: "*/30 * * * *"  # Every 30 minutes
+  workflow_dispatch:         # Allow manual runs
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      BLUESKY_APP_USER: ${{ secrets.BLUESKY_APP_USER }}
+      BLUESKY_APP_PASS: ${{ secrets.BLUESKY_APP_PASS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: smach/bskyconf
+
+      - name: Update posts
+        run: Rscript nicar2026/update_posts.R
+
+      - name: Deploy to Connect Cloud
+        run: |
+          Rscript -e '
+            rsconnect::setAccountInfo(
+              name   = "${{ secrets.RSCONNECT_NAME }}",
+              token  = "${{ secrets.RSCONNECT_TOKEN }}",
+              secret = "${{ secrets.RSCONNECT_SECRET }}",
+              server = "connect.posit.cloud"
+            )
+            rsconnect::deployApp(appDir = "nicar2026", forceUpdate = TRUE)
+          '
+```
+
+This fetches fresh posts and redeploys the app automatically, no local machine
+required.
+
+## Customization
+
+### FAQ text
+
+Edit `_bskyconf.yml` to customize the FAQ modal text:
+
+```yaml
+about_text: "This app tracks NICAR 2026 posts. Built by Sharon Machlis using the bskyconf R package."
+update_text: "Posts are refreshed every 30 minutes during the conference and a few times daily beforehand."
+```
+
+Or pass Shiny tag objects directly for richer HTML:
+
+```{r}
+run_conference_app(
+  conference_name = "NICAR 2026",
+  data_file = "data/table_posts.Rds",
+  about_text = shiny::tags$p(
+    "Built with the ",
+    shiny::tags$a(href = "https://github.com/smach/bskyconf", "bskyconf"),
+    " package."
+  )
+)
+```
+
+### Excluding accounts
+
+Add accounts to exclude in the config:
+
+```yaml
+exclude_accounts:
+  - "spambot.bsky.social"
+  - "unwanted.handle"
+exclude_accounts_regex: "\\.ap\\.brid\\.gy"
+```
+
+bskyconf also automatically excludes accounts with `#nobot` or `#nobots` in their bio and accounts with protected/no-unauthenticated labels.
+
+### Update frequency
+
+The Shiny app checks for new data every 15 minutes by default. Change this with `refresh_interval` (in milliseconds):
+
+```{r}
+run_conference_app(
+  conference_name = "NICAR 2026",
+  data_file = "data/table_posts.Rds",
+  refresh_interval = 300000  # 5 minutes
+)
+```
+
+## Advanced usage
+
+### Fetch posts for custom analysis
+
+Use `fetch_hashtag_posts()` directly to get raw post data for your own analysis:
+
+```{r}
+auth <- bs_conference_auth()
+
+posts <- fetch_hashtag_posts("#rstats", limit = 100, auth = auth)
+
+# Explore the data
+dplyr::glimpse(posts)
+
+# Most liked posts
+posts |>
+  dplyr::arrange(dplyr::desc(Likes)) |>
+  dplyr::select(By, Post, Likes) |>
+  head(10)
+```
+
+### Config-driven workflow
+
+For production setups, use the config file to drive both the update script and the app:
+
+```{r}
+config <- read_conference_config("_bskyconf.yml")
+
+# Update posts
+update_conference_posts(
+  hashtags = config$hashtags,
+  data_dir = config$data_dir,
+  posts_per_hashtag = config$posts_per_hashtag,
+  min_date = as.Date(config$min_date),
+  exclude_accounts = config$exclude_accounts,
+  exclude_accounts_regex = config$exclude_accounts_regex
+)
+
+# Launch app
+run_conference_app(
+  conference_name = config$conference_name,
+  data_file = file.path(config$data_dir, "table_posts.Rds"),
+  conference_slug = config$conference_slug,
+  about_text = config$about_text,
+  update_text = config$update_text
+)
+```

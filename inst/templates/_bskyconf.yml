@@ -1,0 +1,35 @@
+# bskyconf configuration file
+# See ?bskyconf::read_conference_config for details
+
+# Display name for the conference
+conference_name: "My Conference 2026"
+
+# Short name (no spaces) used for file names
+conference_slug: "my_conference_2026"
+
+# Hashtags to search for on Bluesky
+hashtags:
+  - "#MyConf2026"
+  - "#MyConf26"
+
+# Directory for data files (relative to this config file)
+data_dir: "data"
+
+# Number of posts to fetch per hashtag per update
+posts_per_hashtag: 250
+
+# Only include posts on or after this date
+min_date: "2026-01-01"
+
+# Accounts to always exclude (list handles)
+# exclude_accounts:
+#   - "spambot.bsky.social"
+
+# Regex pattern to exclude accounts (e.g., bridge accounts)
+# exclude_accounts_regex: "\\.ap\\.brid\\.gy"
+
+# Text shown in the FAQ "About" section
+about_text: "This app displays posts on Bluesky with tags related to the conference."
+
+# Text shown in the FAQ "How often updated" section
+update_text: "The data is re-pulled every 30 to 60 minutes during the conference."

@@ -1,0 +1,34 @@
+Package: bskyconf
+Title: Track and Display Bluesky Conference Posts
+Version: 0.1.0
+Authors@R:
+    person("Sharon", "Machlis", , "sharon@machlis.com", role = c("aut", "cre"))
+Description: Fetch, deduplicate, and display Bluesky posts for conference
+    hashtags. Includes a Shiny app for browsing posts with date and author
+    filtering, metric cards, and CSV export. Designed for automated updates
+    via cron and deployment on Shiny Server.
+License: MIT + file LICENSE
+URL: https://github.com/smach/bskyconf
+BugReports: https://github.com/smach/bskyconf/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    bskyr (>= 0.4.0),
+    bslib,
+    cli,
+    data.table,
+    dplyr,
+    DT,
+    purrr,
+    rlang,
+    shiny,
+    stringr,
+    yaml
+Suggests:
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
+VignetteBuilder: knitr
