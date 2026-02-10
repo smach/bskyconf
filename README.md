@@ -6,7 +6,7 @@ bskyconf fetches posts matching conference hashtags from the Bluesky API, dedupl
 
 The original project was written completely by me for the Twitter API. I updated it as plain R scripts with the help of Posit's Shiny Assistant to use the Bluesky API. This version as an R package was re-written largely by Posit Assistant + Claude Opus 4.6 with guidance and supervision by me.
 
-Most of the following documentation was writen by Claude, lightly edited by me.
+Most of the following documentation was written by Claude, lightly edited by me.
 
 ## Installation
 
